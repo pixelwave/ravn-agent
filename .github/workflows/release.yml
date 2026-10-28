@@ -65,8 +65,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          path: licenses
+      - uses: actions/checkout@v4
+        with:
           repository: pixelwave/ravn
           ref: ${{ github.event.inputs.ref || 'main' }}
+          path: src
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
@@ -75,12 +79,14 @@ jobs:
         run: |
           cd dist
           sha256sum ravn_linux_* > SHA256SUMS
-          cp ../agent/deploy/install.sh install.sh
-          cp ../agent/deploy/uninstall.sh uninstall.sh
-          cp ../agent/deploy/ravn-apply.sh ravn-apply
-          cp ../agent/deploy/ravn.service ravn.service
-          cp ../agent/deploy/ravn-update.service ravn-update.service
-          cp ../agent/deploy/ravn-update.path ravn-update.path
+          cp ../src/agent/deploy/install.sh install.sh
+          cp ../src/agent/deploy/uninstall.sh uninstall.sh
+          cp ../src/agent/deploy/ravn-apply.sh ravn-apply
+          cp ../src/agent/deploy/ravn.service ravn.service
+          cp ../src/agent/deploy/ravn-update.service ravn-update.service
+          cp ../src/agent/deploy/ravn-update.path ravn-update.path
+          cp ../licenses/LICENSE LICENSE
+          cp ../licenses/COPYRIGHT COPYRIGHT
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.version || github.ref_name }}
@@ -98,3 +104,5 @@ jobs:
             dist/ravn.service
             dist/ravn-update.service
             dist/ravn-update.path
+            dist/LICENSE
+            dist/COPYRIGHT
