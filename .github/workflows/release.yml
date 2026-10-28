@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "[0-9][0-9].[0-9][0-9].[0-9][0-9]"
+      - "[0-9][0-9].[0-9][0-9].[0-9][0-9].[0-9]*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Agent version, for example 26.10.28"
+        required: true
+      ref:
+        description: "pixelwave/ravn git ref to build"
+        required: false
+        default: main
+
+permissions:
+  contents: write
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goarch: amd64
+            asset: ravn_linux_amd64
+            goarm: ""
+          - goarch: arm64
+            asset: ravn_linux_arm64
+            goarm: ""
+          - goarch: arm
+            asset: ravn_linux_armv7
+            goarm: "7"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: pixelwave/ravn
+          ref: ${{ github.event.inputs.ref || 'main' }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: agent/go.sum
+      - name: Build
+        working-directory: agent
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+        run: |
+          version="${{ github.event.inputs.version }}"
+          if [ -z "$version" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          go build -ldflags "-s -w -X ravn/internal/version.Version=${version}" -o "../${{ matrix.asset }}" ./cmd/ravn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  publish:
+    needs: agent
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: pixelwave/ravn
+          ref: ${{ github.event.inputs.ref || 'main' }}
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist
+      - name: Checksums and helper files
+        run: |
+          cd dist
+          sha256sum ravn_linux_* > SHA256SUMS
+          cp ../agent/deploy/install.sh install.sh
+          cp ../agent/deploy/uninstall.sh uninstall.sh
+          cp ../agent/deploy/ravn-apply.sh ravn-apply
+          cp ../agent/deploy/ravn.service ravn.service
+          cp ../agent/deploy/ravn-update.service ravn-update.service
+          cp ../agent/deploy/ravn-update.path ravn-update.path
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version || github.ref_name }}
+          target_commitish: main
+          generate_release_notes: false
+          body: |
+            RAVN agent ${{ github.event.inputs.version || github.ref_name }}.
+            Source: https://github.com/pixelwave/ravn
+          files: |
+            dist/ravn_linux_*
+            dist/SHA256SUMS
+            dist/install.sh
+            dist/uninstall.sh
+            dist/ravn-apply
+            dist/ravn.service
+            dist/ravn-update.service
+            dist/ravn-update.path
